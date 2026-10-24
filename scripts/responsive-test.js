@@ -30,7 +30,8 @@ function check(name, cond, extra = '') {
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-const isBF = (() => { const n = new Date(); return (n.getHours() * 60 + n.getMinutes()) < 10 * 60 + 30; })();
+const isBF = false; // 布局回归固定用午晚餐菜单：早餐菜单首个渲染商品是套餐（点「+」按设计打开选配弹层），
+// 会导致「加购→购物车行」断言在 10:30 前失败——这是测试的时间依赖缺陷，与产品行为无关（2026-10-25 跨午夜复现并修复）
 
 /** 模拟后端 /api 响应：以真实门店/菜单数据驱动应用进入实时模式，用于布局回归 */
 function apiResponse(pathname, body) {
@@ -110,6 +111,9 @@ function apiResponse(pathname, body) {
       await page.setViewport({ width: w, height: h, deviceScaleFactor: 1 });
       await page.goto(`${base}/index.html`, { waitUntil: 'networkidle2', timeout: 30000 });
       await page.waitForFunction(() => document.querySelectorAll('.product-card').length > 0, { timeout: 15000 });
+      // 首访城市选择器会吞掉后续点击（模态遮罩在顶层）：先防御性关掉（无则为空操作）
+      await page.evaluate(() => { document.querySelector('[data-action="close-city-picker"]')?.click(); });
+      await sleep(200);
       // 打开门店选择器与详情弹层后再测一次（弹层内也可能溢出）
       await page.click('#store-pill');
       await sleep(300);
@@ -130,6 +134,9 @@ function apiResponse(pathname, body) {
     await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
     await page.goto(`${base}/index.html`, { waitUntil: 'networkidle2', timeout: 30000 });
     await page.waitForFunction(() => document.querySelectorAll('.product-card').length > 0, { timeout: 15000 });
+    // 防御性关闭首访城市选择器，避免模态遮罩吞掉加购点击（无则为空操作）
+    await page.evaluate(() => { document.querySelector('[data-action="close-city-picker"]')?.click(); });
+    await sleep(200);
     await page.click('.product-card .p-add');
     await sleep(400);
     await page.evaluate(() => { location.hash = '#/cart'; });

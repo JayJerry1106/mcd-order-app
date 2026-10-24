@@ -83,13 +83,14 @@ const html = fs.readFileSync(path.join(ROOT, 'public/index.html'), 'utf8')
     if (p === '/api/price') return ok({ success: true, data: { data: fakePrice() } });
     if (u.hostname.includes('nominatim.openstreetmap.org')) {
       fetchMock.urls.push('nominatim');
-      if (fetchMock.mode === 'all-fail' || fetchMock.mode === 'nominatim-fail') throw new Error('network down');
+      if (fetchMock.mode === 'all-fail' || fetchMock.mode === 'nominatim-fail' || fetchMock.mode === 'tc-jinan') throw new Error('network down');
       return ok({ address: { neighbourhood: '建外SOHO', suburb: '建国门外街道', city_district: '朝阳区', city: '北京市' }, lat: 39.9088, lon: 116.4675, display_name: '建外SOHO, 东三环中路, 朝阳区, 北京市' });
     }
     if (u.hostname.includes('bigdatacloud.net')) {
       fetchMock.urls.push('bigdatacloud');
       if (fetchMock.mode === 'all-fail') throw new Error('network down');
       // 与真实提供商一致：localityLanguage=zh 实际返回繁体
+      if (fetchMock.mode === 'tc-jinan') return ok({ city: '濟南市', locality: '天橋區', principalSubdivision: '山東省' });
       return ok({ city: '北京市', locality: '朝陽區', principalSubdivision: '北京市' });
     }
     throw new Error('未预期的请求 ' + p);
@@ -120,7 +121,7 @@ const html = fs.readFileSync(path.join(ROOT, 'public/index.html'), 'utf8')
 
   const bundle = ['config.js', 'geo.js', 'api.js', 'state.js', 'checkout.js', 'budget.js', 'voice.js', 'views.js', 'app.js']
     .map((f) => fs.readFileSync(path.join(ROOT, 'public/js', f), 'utf8')).join('\n;\n')
-    + '\n;window.__app = { Store, Api, Draft, Voice, Views, UI, CheckoutCtrl, Geo, haversine, formatDistance, formatAccuracy, hashAngle, BudgetPlanner };';
+    + '\n;window.__app = { Store, Api, Draft, Voice, Views, UI, CheckoutCtrl, Geo, haversine, formatDistance, formatAccuracy, hashAngle, t2s, BudgetPlanner };';
   // 预置历史门店：跳过首访城市选择，聚焦被测流程
   window.localStorage.setItem('mcd_store_v1', JSON.stringify(fixtures.stores[0]));
   window.eval(bundle);
@@ -143,6 +144,27 @@ const html = fs.readFileSync(path.join(ROOT, 'public/index.html'), 'utf8')
   check('formatDistance 十位千米取整', formatDistance(12300) === '12km');
   check('formatAccuracy 精度', formatAccuracy(15) === '±15m' && formatAccuracy(2500) === '±2.5km');
   check('hashAngle 确定且落在 0-359', hashAngle('1950564') === hashAngle('1950564') && hashAngle('1950564') >= 0 && hashAngle('1950564') < 360);
+
+  /* ========== 1.5 繁简转换（T2S，2026-10-24 线上事故回归） ========== */
+  console.log('\n--- 繁简转换（T2S） ---');
+  const { t2s } = App();
+  check('t2s：濟南市（线上事故字符：遗漏导致 MCP 600014）', t2s('濟南市') === '济南市', t2s('濟南市'));
+  check('t2s：天橋區', t2s('天橋區') === '天桥区', t2s('天橋區'));
+  check('t2s：混合长串', t2s('山東省濟南市天橋區') === '山东省济南市天桥区', t2s('山東省濟南市天橋區'));
+  check('t2s：臺北市', t2s('臺北市') === '台北市', t2s('臺北市'));
+  check('t2s：重慶市', t2s('重慶市') === '重庆市', t2s('重慶市'));
+  check('t2s：大連市', t2s('大連市') === '大连市', t2s('大連市'));
+  check('t2s：寧波市', t2s('寧波市') === '宁波市', t2s('寧波市'));
+  check('t2s：蘇州市', t2s('蘇州市') === '苏州市', t2s('蘇州市'));
+  check('t2s：無錫市', t2s('無錫市') === '无锡市', t2s('無錫市'));
+  check('t2s：羅湖區', t2s('羅湖區') === '罗湖区', t2s('羅湖區'));
+  check('t2s：禪城區', t2s('禪城區') === '禅城区', t2s('禪城區'));
+  check('t2s：樂山市', t2s('樂山市') === '乐山市', t2s('樂山市'));
+  check('t2s：庫爾勒', t2s('庫爾勒') === '库尔勒', t2s('庫爾勒'));
+  check('t2s：哈爾濱', t2s('哈爾濱') === '哈尔滨', t2s('哈爾濱'));
+  check('t2s：澳門', t2s('澳門') === '澳门', t2s('澳門'));
+  check('t2s：简体原样返回', t2s('济南市天桥区') === '济南市天桥区');
+  check('t2s：空值与 null 安全', t2s('') === '' && t2s(null) === '' && t2s(undefined) === '');
 
   /* ========== 2. 定位引擎 ========== */
   console.log('\n--- 定位引擎 ---');
@@ -214,6 +236,14 @@ const html = fs.readFileSync(path.join(ROOT, 'public/index.html'), 'utf8')
     r6.place && r6.place.keyword + ' / ' + r6.place.city);
   check('标签去重拼接', r6.place && r6.place.label === '朝阳区 · 北京市', r6.place && r6.place.label);
 
+  // 2.9 繁体城市名端到端转换（2026-10-24 线上事故回归：濟南市漏转 → MCP 报 600014）
+  G().clearCache(); G().reset();
+  geoMock.calls = []; geoMock.mode = 'success'; fetchMock.mode = 'tc-jinan';
+  const r7 = await G().locate();
+  check('事故回归：繁体「濟南市」完整转为简体', r7.place && r7.place.city === '济南市', r7.place && r7.place.city);
+  check('事故回归：繁体「天橋區」完整转为简体', r7.place && r7.place.keyword === '天桥区', r7.place && r7.place.keyword);
+  check('事故回归：繁体标签完整转换', r7.place && r7.place.label === '天桥区 · 山东省 · 济南市', r7.place && r7.place.label);
+
   /* ========== 3. 数据层：门店排序与诚实性（实时） ========== */
   console.log('\n--- 数据层：门店排序与诚实性 ---');
   geoMock.mode = 'success'; fetchMock.mode = 'ok';
@@ -240,6 +270,33 @@ const html = fs.readFileSync(path.join(ROOT, 'public/index.html'), 'utf8')
   apiObj.req = async () => ({ data: [{ storeCode: 'R', storeName: '麦当劳偏远餐厅', distance: 9500 }] });
   const liveRemote = await apiObj.getStoresByLocation({ city: '北京市', keyword: '建外SOHO', label: 'x', refDistance: 50, approx: false, precision: 3 });
   check('最近门店过远时提示确认位置', /偏远/.test(liveRemote.geoNote || ''), liveRemote.geoNote);
+
+  // 3.x 降级重试链（2026-10-24 加固）：POI 级查询失败/为空 → 逐级降级，拿到门店即采用
+  let storeCalls = 0;
+  apiObj.req = async (p, body) => {
+    storeCalls += 1;
+    // 模拟 MCP：解析不了的城市名/关键词 → 600014；空关键词（城市级）→ 成功
+    if (body && body.keyword) throw new Error('没有查询到该地址，请检查配送地址是否正确');
+    return { data: [{ storeCode: 'C1', storeName: '麦当劳城市级餐厅', distance: 1200 }] };
+  };
+  const rl = await apiObj.getStoresByLocation({ city: '某某市', keyword: '某某区', label: 'x', refDistance: null, approx: false, precision: 1 });
+  check('降级重试：POI 失败后拿到城市级门店', rl.stores.length === 1 && rl.stores[0].storeCode === 'C1', JSON.stringify(rl.stores));
+  check('降级重试：标记 degraded 并给出诚实说明', rl.degraded === true && /降级/.test(rl.geoNote || ''), rl.geoNote);
+  check('降级重试：逐级尝试 4 个候选后成功', storeCalls === 4, 'calls=' + storeCalls);
+
+  // 全部候选失败 → 抛出原始错误（不伪造成功、不静默空列表）
+  apiObj.req = async () => { throw new Error('没有查询到该地址，请检查配送地址是否正确'); };
+  let rlErr = null;
+  try {
+    await apiObj.getStoresByLocation({ city: '某某市', keyword: '某某区', label: 'x', refDistance: null, approx: false, precision: 1 });
+  } catch (e) { rlErr = e; }
+  check('降级重试：全部失败才抛错且保留原始原因', rlErr && /没有查询到该地址/.test(rlErr.message), rlErr && rlErr.message);
+
+  // 首选成功 → 不降级、只调一次（正常路径零回归）
+  storeCalls = 0;
+  apiObj.req = async () => { storeCalls += 1; return { data: [{ storeCode: 'P1', storeName: '麦当劳POI级餐厅', distance: 300 }] }; };
+  const rl2 = await apiObj.getStoresByLocation({ city: '济南市', keyword: '天桥区', label: 'x', refDistance: null, approx: false, precision: 1 });
+  check('首选成功不降级且只请求一次', rl2.degraded === false && storeCalls === 1, 'calls=' + storeCalls);
   apiObj.req = origReq;
 
   /* ========== 3.6 门店搜索诚实性（济南搜索返回北京门店 bug 回归） ========== */

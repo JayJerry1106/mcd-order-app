@@ -89,18 +89,54 @@ const Api = {
    * 按定位结果搜索门店并排序。
    * 用逆向地理编码得到的 city + POI 关键词调 MCP，MCP 返回的 distance 即为
    * 「距该参考点」的直线距离（米），升序即由近到远。
-   * @returns {Promise<{stores: Array, geoNote: string|null, located: boolean}>}
+   *
+   * 降级重试链（2026-10-24 线上事故加固）：MCP 对解析不了的 city/keyword 组合
+   * 会报 600014「没有查询到该地址」或静默返回空（如繁体城市名「濟南市」漏转）。
+   * 此时按精度逐级降级重试，任何一级拿到门店即采用：
+   *   ① {city, keyword}         最精确（POI 级）
+   *   ② {city, 去后缀keyword}    如「天桥区」→「天桥」
+   *   ③ {去后缀city, 去后缀keyword}
+   *   ④ {city, ''}               城市级（MCP 对空关键词返回全城门店）
+   * 全部失败才抛出原始错误（保留真实原因，不伪造成功）。
+   * @returns {Promise<{stores: Array, geoNote: string|null, located: boolean, degraded: boolean}>}
    */
   async getStoresByLocation(place) {
     const located = !!place;
     if (!place) {
       // 定位成功但无法解析地址：保留当前列表，交由 UI 引导手动搜索
-      return { stores: [], geoNote: null, located: false };
+      return { stores: [], geoNote: null, located: false, degraded: false };
     }
-    const d = await this.req(appUrl('/api/stores'), { city: place.city, keyword: place.keyword, beType: 1 });
-    const stores = (d.data || []).slice().sort((a, b) => (a.distance ?? 1e9) - (b.distance ?? 1e9));
+    const stripAdmin = (s) => String(s || '').replace(/[市县区旗盟]$/, '');
+    const candidates = [];
+    const seen = new Set();
+    const push = (city, keyword) => {
+      const key = `${city}|${keyword}`;
+      if (!seen.has(key)) { seen.add(key); candidates.push({ city, keyword }); }
+    };
+    push(place.city, place.keyword);
+    push(place.city, stripAdmin(place.keyword));
+    push(stripAdmin(place.city), stripAdmin(place.keyword));
+    if (place.city) push(place.city, '');
+
+    let stores = [];
+    let lastError = null;
+    let used = candidates[0];
+    for (const c of candidates) {
+      try {
+        const d = await this.req(appUrl('/api/stores'), { city: c.city, keyword: c.keyword, beType: 1 });
+        const list = (d.data || []).slice().sort((a, b) => (a.distance ?? 1e9) - (b.distance ?? 1e9));
+        if (list.length) { stores = list; used = c; break; }
+      } catch (e) {
+        lastError = e; // 记下错误继续降级，全部失败才抛
+      }
+    }
+    if (!stores.length && lastError) throw lastError;
+    const degraded = used.keyword !== place.keyword || used.city !== place.city;
+
     let note = null;
-    if (place.approx) {
+    if (degraded) {
+      note = `未能按「${place.keyword}」定位到门店，已降级为「${used.city || '当前城市'}」级搜索结果`;
+    } else if (place.approx) {
       note = `当前仅解析到区县级（${place.keyword}），距离按区中心计算，可能偏差较大；可手动输入更精确的位置关键词`;
     } else if (place.refDistance > 300) {
       note = `定位参考点与当前位置偏差约 ${formatDistance(place.refDistance)}，距离可能存在误差`;
@@ -108,7 +144,7 @@ const Api = {
       // MCP 对无法解析的关键词会静默回退到默认参考点，距离会虚大
       note = '最近门店距离偏远，请确认定位地址或手动输入更精确的位置关键词';
     }
-    return { stores, geoNote: note, located: true };
+    return { stores, geoNote: note, located: true, degraded };
   },
 
   /** 菜单（自动区分早餐/正餐时段） */
