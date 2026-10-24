@@ -1,0 +1,24 @@
+{
+  "name": "mcd-order-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "麦当劳点餐助手：菜单浏览、配料定制、购物车、优惠券优先领取与下单结算（麦当劳 MCP 驱动）",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "node scripts/geo-test.js && node scripts/smoke-test.js && node scripts/static-deploy-test.js && node scripts/responsive-test.js && node scripts/voice-test.js",
+    "test:live": "node scripts/live-test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "mcdonald",
+    "mcp",
+    "mcd-mcp",
+    "ordering",
+    "voice"
+  ],
+  "license": "MIT"
+}

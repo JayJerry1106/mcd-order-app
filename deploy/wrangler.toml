@@ -1,0 +1,12 @@
+# Cloudflare Pages 部署配置（推荐方案）
+# 用法：
+#   1. npm install -g wrangler        # 一次性安装 CLI（需 Node ≥18）
+#   2. npx wrangler login             # 浏览器授权（免费 Cloudflare 账号）
+#   3. npx wrangler pages deploy public --project-name=mcd-order-app --commit-dirty=true
+# 部署完成后得到永久链接：https://mcd-order-app.pages.dev
+# 自定义域名：Pages 项目后台 → Custom domains → 添加后按提示改 DNS（CNAME 到 <项目>.pages.dev）
+name = "mcd-order-app"
+compatibility_date = "2026-10-21"
+
+# 静态站点：直接发布 public/ 目录（hash 路由 + 相对路径，无需 SPA 重写规则）
+pages_build_output_dir = "public"

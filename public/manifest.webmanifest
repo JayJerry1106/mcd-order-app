@@ -1,0 +1,16 @@
+{
+  "name": "麦乐点 · 麦当劳点餐助手",
+  "short_name": "麦乐点",
+  "description": "麦当劳点餐助手：菜单浏览、配料定制、优惠券优先领取、一键下单",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f5f5",
+  "theme_color": "#DA291C",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 90'%3E%3Cpath fill='%23FFC72C' d='M14 86C14 36 28 16 44 16c16 0 30 20 30 70H58c0-34-4-48-14-48S30 52 30 86z'/%3E%3Cpath fill='%23FFC72C' d='M46 86C46 36 60 16 76 16c16 0 30 20 30 70H90c0-34-4-48-14-48s-14 14-14 48z'/%3E%3C/svg%3E",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

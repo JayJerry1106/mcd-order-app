@@ -1,0 +1,15 @@
+# Render 部署蓝图（需要公网 Node 服务时选用；公开可写下单场景需配合只读/鉴权，见 DEPLOYMENT.md）
+# 用法：Render 后台 → New → Blueprint → 选择仓库，按本文件自动创建 Web Service
+# 得到永久链接：https://mcd-order-app.onrender.com
+# 注意：免费档 15 分钟无访问会休眠，冷启动约 30-60 秒
+services:
+  - type: web
+    name: mcd-order-app
+    runtime: node
+    plan: free
+    buildCommand: echo "no dependencies to install"
+    startCommand: node server.js
+    envVars:
+      # 不配置 MCD_MCP_TOKEN = 展示「需配置后端」（无数据）；配置后 = 实时模式（任何人可真实下单，务必配合 MCD_PUBLIC_READONLY 或鉴权！）
+      - key: NODE_VERSION
+        value: "22"

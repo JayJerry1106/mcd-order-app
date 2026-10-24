@@ -1,0 +1,14 @@
+# Netlify 部署配置
+# 用法：npm install -g netlify-cli && netlify login && netlify deploy --dir=public --prod
+# 或 Netlify 后台 → Add new site → Deploy manually，拖入 public/ 目录
+# 得到永久链接：https://<站点名>.netlify.app
+[build]
+  publish = "public"
+  command = ""   # 无需构建
+
+# hash 路由无需重写规则；以下仅为安全加固（禁止访问 .env 等敏感文件——虽然部署目录本就不含 .env）
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "same-origin"
