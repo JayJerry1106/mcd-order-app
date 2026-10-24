@@ -27,6 +27,7 @@ function createStore() {
       category: '全部',
       detailCode: null,        // 详情弹层商品
       storePickerOpen: false,
+      cityPickerOpen: false,   // 首访城市选择（无历史门店时展示）
       checkout: { step: 1, takeWay: 'eat-in', needTableware: false, coupon: null, priceResult: null, orderResult: null, claiming: false },
     },
   };
@@ -77,7 +78,8 @@ function createStore() {
     setCategory(c) { state.ui.category = c; this.emit(); },
     openDetail(code) { state.ui.detailCode = code; this.emit(); },
     closeDetail() { state.ui.detailCode = null; this.emit(); },
-    setStorePicker(open) { state.ui.storePickerOpen = open; this.emit(); },
+    setStorePicker(open) { state.ui.storePickerOpen = open; if (open) state.ui.cityPickerOpen = false; this.emit(); },
+    setCityPicker(open) { state.ui.cityPickerOpen = open; if (open) state.ui.storePickerOpen = false; this.emit(); },
     patchCheckout(patch) { Object.assign(state.ui.checkout, patch); this.emit(); },
     resetCheckout() {
       state.ui.checkout = { step: 1, takeWay: 'eat-in', needTableware: false, coupon: null, priceResult: null, orderResult: null, claiming: false };

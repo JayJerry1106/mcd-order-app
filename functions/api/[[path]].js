@@ -19,6 +19,24 @@ function json(status, obj) {
 }
 
 let rpcId = 1;
+
+// 简易 IP 限流（与 server.js 一致）：保护 MCP Token 配额与账户写操作。
+// 注意：Workers 按 isolate 隔离，Map 为尽力而为防护，严格限流建议在 Cloudflare 仪表板配置 Rate Limiting 规则。
+const RL = {
+  write: { max: 20, window: 10 * 60 * 1000 },
+  read: { max: 600, window: 60 * 1000 },
+};
+const rlBuckets = new Map();
+function rlOk(ip, kind) {
+  const { max, window } = RL[kind];
+  const now = Date.now();
+  let b = rlBuckets.get(ip);
+  if (!b || now > b.reset) { b = { w: 0, r: 0, reset: now + window }; rlBuckets.set(ip, b); }
+  const key = kind === 'write' ? 'w' : 'r';
+  b[key] += 1;
+  return b[key] <= max;
+}
+
 async function callMcp(env, tool, args) {
   const url = env.MCD_MCP_URL || 'https://mcp.mcd.cn/';
   const token = (env.MCD_MCP_TOKEN || '').trim();
@@ -96,6 +114,17 @@ export async function onRequest(context) {
   const token = (env.MCD_MCP_TOKEN || '').trim();
   if (!token) {
     return json(503, { success: false, error: '后端未配置 MCD_MCP_TOKEN，无法调用真实接口' });
+  }
+
+  // IP 限流：/api/status 豁免；写操作（下单/领券）更严格
+  if (pathname !== '/api/status') {
+    const ip = request.headers.get('cf-connecting-ip') || 'unknown';
+    const isWrite = method === 'POST' && /^\/api\/(order|coupons\/claim)$/.test(pathname);
+    if (!rlOk(ip, isWrite ? 'write' : 'read')) {
+      return json(429, { success: false, error: isWrite
+        ? '操作过于频繁（每 IP 每 10 分钟最多 20 次写操作），请稍后再试'
+        : '请求过于频繁（每 IP 每分钟最多 600 次），请稍后再试' });
+    }
   }
 
   // 公网只读：拦截写操作（下单 / 领券）

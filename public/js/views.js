@@ -198,6 +198,7 @@ const Views = {
     if (state.ui.detailCode) this.renderDetailModal(state);
     else if ($('#modal-root .modal-mask') && !state.ui.storePickerOpen) UI.closeModal();
     if (state.ui.storePickerOpen) this.renderStorePicker(state);
+    if (state.ui.cityPickerOpen) this.renderCityPicker(state);
   },
 
   /* ---------- 顶部 ---------- */
@@ -633,6 +634,21 @@ const Views = {
         <text x="${cx}" y="${cy + 26}" font-size="9.5" font-weight="600" fill="#4d4d4d" text-anchor="middle">${esc(centerLabel.length > 10 ? centerLabel.slice(0, 10) + '…' : centerLabel)}</text>
       </svg>
     </div>`;
+  },
+
+  /* ---------- 城市选择（首访：无历史门店时引导，避免默认北京门店的困惑） ---------- */
+  renderCityPicker(state) {
+    const cities = ['济南', '北京', '上海', '广州', '深圳', '成都', '杭州', '武汉', '西安', '南京', '重庆', '天津', '苏州', '青岛', '郑州'];
+    UI.modal(`
+      <div class="detail-body city-picker-body">
+        <div class="detail-name">📍 先选个城市</div>
+        <p class="detail-desc">首次使用：选择城市后展示该城市的真实门店；之后可在门店选择器里搜索更精确的位置（如商圈、路名）。</p>
+        <div class="city-grid">
+          ${cities.map((c) => `<button class="city-chip" data-action="pick-city" data-city="${esc(c)}">${esc(c)}</button>`).join('')}
+        </div>
+        <button class="btn btn-primary btn-block" data-action="locate-me" type="button">📍 定位到当前位置</button>
+        <button class="btn btn-ghost btn-block" data-action="close-city-picker" style="margin-top:10px">暂不选择，先逛逛</button>
+      </div>`);
   },
 
   /* ---------- 订单列表（麦当劳账户实时订单 + 本地记录兜底） ---------- */

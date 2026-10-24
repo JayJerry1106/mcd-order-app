@@ -235,12 +235,14 @@ const Voice = {
 
     // 8) 切换门店 / 实时定位
     if (/定位|当前位置|附近/.test(text) && /门店|麦当劳|餐厅|定位|位置/.test(text)) {
+      Store.setCityPicker(false);
       Store.setStorePicker(true);
       this.reply('正在获取您的当前位置，请允许定位权限');
       if (window.AppActions && window.AppActions.locateStores) window.AppActions.locateStores();
       return;
     }
     if (/门店|换一家/.test(text)) {
+      Store.setCityPicker(false);
       Store.setStorePicker(true);
       reply = '已打开门店选择，附近有 ' + Store.state.stores.length + ' 家麦当劳';
       this.reply(reply); return;

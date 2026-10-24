@@ -30,6 +30,26 @@
     await loadMenu();
   }
 
+  /** 切换城市（首访城市选择器）：city 名同时作为 MCP 关键词可返回该城市门店列表 */
+  async function switchCity(city) {
+    try {
+      const { stores, note } = await Api.getStores(city, city);
+      if (!stores.length) {
+        UI.toast(`${city} 暂未找到门店，换个城市试试`, 'error');
+        return;
+      }
+      Store.setStores(stores, { label: city, city, keyword: city, located: false });
+      Store.patchGeo({ note });
+      Store.setStore(stores[0]);
+      Store.resetCheckout();
+      Store.setCityPicker(false);
+      UI.toast(`已切换：${city} · ${stores[0].storeName.replace(/^麦当劳/, '')}`, 'success');
+      await loadMenu();
+    } catch (e) {
+      UI.toast('城市切换失败：' + e.message, 'error');
+    }
+  }
+
   /* ---------- 实时定位 ---------- */
   /**
    * 定位并搜索附近门店。
@@ -129,6 +149,14 @@
         Store.setStorePicker(false);
         break;
 
+      case 'pick-city':
+        await switchCity(el.dataset.city);
+        break;
+
+      case 'close-city-picker':
+        Store.setCityPicker(false);
+        break;
+
       case 'locate-me':
       case 'retry-locate':
         await locateStores(act === 'retry-locate');
@@ -182,6 +210,7 @@
 
       /* ---- 饭点安排 · 预算搭配 ---- */
       case 'open-planner':
+        Store.setCityPicker(false);
         BudgetPlanner.openPlanner();
         break;
       case 'planner-budget':
@@ -323,6 +352,7 @@
     Voice.init();
 
     // 门店与菜单
+    const firstVisit = !Store.state.store;   // 无历史门店：加载完后引导选城市（避免默认北京门店的困惑）
     try {
       const { stores, note } = await Api.getStores('北京市', '国贸');
       Store.setStores(stores, { label: '国贸', city: '北京市', keyword: '国贸', located: false });
@@ -334,6 +364,7 @@
       UI.toast('门店加载失败：' + e.message, 'error');
     }
     await loadMenu();
+    if (firstVisit) Store.setCityPicker(true);
     Api.getNutrition().then((n) => Store.setNutrition(n)).catch(() => {});
 
     // 路由

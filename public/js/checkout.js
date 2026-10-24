@@ -188,18 +188,29 @@ const CheckoutCtrl = {
       </div>`;
   },
 
-  /* ---------- 第 4 步：下单结果 ---------- */
+  /* ---------- 第 4 步：下单结果（取餐码 + 支付链接 + 取餐柜二维码闭环） ---------- */
   step4(state) {
     const c = state.ui.checkout;
     const o = c.orderResult || {};
+    const od = o.orderDetail || {};
+    const payUrl = o.payH5Url || od.payH5Url || '';
+    const statusText = ORDER_STATUS[String(od.orderStatus)] || o.status || '待支付';
+    const realTotal = od.realTotalAmount || (c.priceResult ? fenToYuan(c.priceResult.price) : null);
+    const discount = od.totalDiscountAmount || '';
     return `
       <div class="checkout-card order-success">
         <div class="os-icon">🎉</div>
         <h2>下单成功</h2>
-        ${o.pickupCode ? `<div class="os-code">${esc(o.pickupCode)}</div><p>取餐码</p>` : ''}
-        <p>订单号：${esc(o.orderId || '-')}<br />
-        ${esc(o.message || '请通过麦当劳 App 扫码或打开支付链接完成支付。')}</p>
+        <p class="os-status">订单状态：${esc(statusText)}${discount ? ` · 本单优惠 ¥${esc(discount)}` : ''}</p>
+        ${realTotal != null ? `<div class="os-code">¥${fmtMoney(realTotal)}</div><p>实付金额</p>` : ''}
+        ${o.pickupCode || od.pickupCode ? `<div class="os-code">${esc(o.pickupCode || od.pickupCode)}</div><p>取餐码</p>` : ''}
+        ${od.lockerQrCode ? `<img class="os-locker-qr" src="${esc(od.lockerQrCode)}" alt="取餐柜二维码" />` : ''}
+        ${od.lockerCode ? `<div class="os-code small">${esc(od.lockerCode)}</div><p>取餐柜密码</p>` : ''}
+        ${od.expirePayTime ? `<p class="os-expire">支付截止：${esc(od.expirePayTime)}</p>` : ''}
+        <p>订单号：${esc(o.orderId || od.orderId || '-')}<br />
+        ${esc(o.message || '请通过支付链接或麦当劳 App 完成支付。')}</p>
         <div class="os-actions">
+          ${payUrl ? `<a class="btn btn-primary btn-lg" href="${esc(payUrl)}" target="_blank" rel="noopener">去支付</a>` : ''}
           <button class="btn btn-ghost" data-action="goto" data-route="menu">返回点餐</button>
           <button class="btn btn-primary" data-action="goto" data-route="orders">查看订单</button>
         </div>
@@ -322,20 +333,25 @@ const CheckoutCtrl = {
       const c = state.ui.checkout;
       const coupon = c.coupon && c.coupon.idx >= 0 ? (c.coupons || [])[c.coupon.idx] : null;
       const r = await Api.createOrder(state.store.storeCode, state.cart, coupon, c.takeWay, c.needTableware);
+      const od = r.orderDetail || {};
       const order = {
-        orderId: r.orderId || String(Date.now()),
-        pickupCode: r.pickupCode || '',
-        status: r.status || '待支付',
-        storeName: state.store?.storeName || '',
+        orderId: r.orderId || od.orderId || String(Date.now()),
+        pickupCode: od.pickupCode || r.pickupCode || '',
+        status: ORDER_STATUS[String(od.orderStatus)] || r.status || '待支付',
+        storeName: od.storeName || state.store?.storeName || '',
         takeWay: (c.priceResult?.takeWayList || []).find((t) => t.code === c.takeWay)?.title || c.takeWay,
         items: state.cart.map((l) => ({ name: l.name, qty: l.qty, unitPrice: l.unitPrice })),
-        total: fenToYuan(c.priceResult?.price ?? Store.cartSubtotal() * 100),
-        time: new Date().toLocaleString('zh-CN', { hour12: false }),
+        total: parseFloat(od.realTotalAmount) || fenToYuan(c.priceResult?.price ?? Store.cartSubtotal() * 100),
+        time: od.createTime || new Date().toLocaleString('zh-CN', { hour12: false }),
         message: r.message || '',
+        payH5Url: r.payH5Url || '',
+        lockerQrCode: od.lockerQrCode || '',
+        lockerCode: od.lockerCode || '',
+        expirePayTime: od.expirePayTime || '',
       };
       Store.addOrder(order);
       Store.clearCart();
-      Store.patchCheckout({ step: 4, orderResult: r });
+      Store.patchCheckout({ step: 4, orderResult: { ...r, orderDetail: od } });
       UI.toast('下单成功，请完成支付', 'success');
     } catch (e) {
       UI.toast(Api.authFailed
@@ -345,4 +361,10 @@ const CheckoutCtrl = {
     UI.btnRestore(btn);
     this.render(Store.state);
   },
+};
+
+/** MCP orderStatus 数字码 → 中文（create-order 返回数字，order-list 返回中文文案） */
+const ORDER_STATUS = {
+  '1': '待支付', '2': '已支付 · 配餐中', '4': '配送中',
+  '6': '已完成', '7': '已取消', '8': '已评价', '10': '餐厅确认配餐中',
 };

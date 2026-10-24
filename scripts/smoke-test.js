@@ -76,6 +76,8 @@ async function waitFor(fn, timeout = 8000, interval = 100) {
   const bundle = ['config.js', 'geo.js', 'api.js', 'state.js', 'checkout.js', 'budget.js', 'voice.js', 'views.js', 'app.js']
     .map((f) => fs.readFileSync(path.join(ROOT, 'public/js', f), 'utf8')).join('\n;\n')
     + '\n;window.__app = { Store, Api, Draft, Voice, Views, UI, CheckoutCtrl, Geo, BudgetPlanner, haversine, formatDistance };';
+  // 预置历史门店：跳过首访城市选择，聚焦被测流程
+  window.localStorage.setItem('mcd_store_v1', JSON.stringify(fixtures.stores[0]));
   window.eval(bundle);
   const App = () => window.__app;
   const S = () => App().Store;

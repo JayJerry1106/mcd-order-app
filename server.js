@@ -111,6 +111,29 @@ function readBody(req) {
   });
 }
 
+// ---------- 简易 IP 限流（保护 MCP Token 配额与账户写操作） ----------
+// 公网部署时任何人都能触发写操作（真实领券/下单），限流是最低成本的防护。
+// 默认：写操作（下单/领券）每 IP 10 分钟 20 次；读操作每 IP 每分钟 600 次（与 MCP 配额对齐）。
+const RL = {
+  write: { max: Number(process.env.RATE_LIMIT_WRITE_MAX) || 20, window: 10 * 60 * 1000 },
+  read: { max: Number(process.env.RATE_LIMIT_READ_MAX) || 600, window: 60 * 1000 },
+};
+const rlBuckets = new Map();   // ip -> { w, r, reset }
+function rlOk(ip, kind) {
+  const { max, window } = RL[kind];
+  const now = Date.now();
+  let b = rlBuckets.get(ip);
+  if (!b || now > b.reset) { b = { w: 0, r: 0, reset: now + window }; rlBuckets.set(ip, b); }
+  const key = kind === 'write' ? 'w' : 'r';
+  b[key] += 1;
+  return b[key] <= max;
+}
+// 定期清理过期桶，防止 Map 无限增长
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of rlBuckets) if (now > v.reset) rlBuckets.delete(k);
+}, 60000).unref();
+
 // ---------- API 路由 ----------
 const routes = {
   'GET /api/status': async () => ({
@@ -209,6 +232,17 @@ function serveStatic(req, res, pathname) {
 const server = http.createServer(async (req, res) => {
   const { pathname } = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const routeKey = `${req.method} ${pathname}`;
+
+  // IP 限流：/api/status（健康探测）豁免；写操作（下单/领券）更严格
+  if (pathname.startsWith('/api/') && pathname !== '/api/status') {
+    const ip = ((req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || 'unknown');
+    const isWrite = req.method === 'POST' && /^\/api\/(order|coupons\/claim)$/.test(pathname);
+    if (!rlOk(ip, isWrite ? 'write' : 'read')) {
+      return sendJson(res, 429, { success: false, error: isWrite
+        ? '操作过于频繁（每 IP 每 10 分钟最多 20 次写操作），请稍后再试'
+        : '请求过于频繁（每 IP 每分钟最多 600 次），请稍后再试' });
+    }
+  }
 
   if (routes[routeKey]) {
     try {

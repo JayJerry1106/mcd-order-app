@@ -647,3 +647,19 @@ em { font-style: normal; }
 .combo-total { font-size: 20px; font-weight: 500; color: var(--red); }
 .combo-note { font-size: 11px; color: var(--ink-3); margin-left: 6px; }
 .combo-saved { font-size: 11px; color: var(--green); margin-left: 6px; }
+
+/* ============================================================
+   首访城市选择 / 下单结果支付闭环
+   ============================================================ */
+.city-picker-body { max-width: 520px; }
+.city-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 14px 0; }
+.city-chip {
+  padding: 10px 0; border-radius: var(--radius); border: 1px solid var(--line);
+  background: var(--card); font-size: 14px; color: var(--ink); cursor: pointer;
+}
+.city-chip:active { background: var(--yellow-light); border-color: var(--yellow-dark); }
+@media (min-width: 480px) { .city-grid { grid-template-columns: repeat(5, 1fr); } }
+.os-status { font-size: 13px; color: var(--ink-2); margin: 6px 0 2px; }
+.os-expire { font-size: 12px; color: var(--ink-3); margin-top: 4px; }
+.os-code.small { font-size: 22px; letter-spacing: 2px; }
+.os-locker-qr { width: 160px; height: 160px; margin: 10px auto 4px; border: 0.5px solid var(--line); border-radius: var(--radius); }

@@ -114,7 +114,7 @@
 | 前端 | 原生 HTML/CSS/JS SPA（hash 路由、发布订阅、localStorage） |
 | 数据 | 麦当劳 MCP（实时，无演示/快照） |
 | 语音 | Web Speech API（识别 + TTS，zh-CN） |
-| 测试 | jsdom + 真实浏览器自动化（173/173：定位 71 + 冒烟 38 + 静态部署 13 + 响应式 28 + 语音 23；另 live-test 需本机 Token） |
+| 测试 | jsdom + 真实浏览器自动化 + 服务端子进程（231/231：定位 71 + 冒烟 38 + 静态部署 13 + 响应式 28 + 语音 23 + 预算搭配 51 + 限流 7；另 live-test 需本机 Token） |
 
 ---
 
@@ -247,3 +247,44 @@
 ## 6. 赛前合规（上一轮已完成，备忘）
 
 git init + 敏感清理（.wrangler/.workbuddy 排除）、CONTEST_DECLARATION.md 换官方原文、新增 mcp-config.example.json、README 首屏加演示入口；待用户推送 GitHub 并在官方仓库发 Issue 报名（截止 10-25 23:59）。
+
+---
+
+# 第四阶段迭代：首访城市选择 + 支付闭环 + 公网限流（P2）
+
+> 背景：P2 传播轮——降低评审体验门槛、补上真实下单的支付闭环、给公网演示加安全兜底。
+> 三项改造：启动默认城市适配 / create-order 支付链接展示 / 公网 IP 限流。测试 215 → 231。
+
+## 1. 启动默认城市适配（首访城市选择器）
+
+- 问题：服务端默认门店与新访客所在城市不匹配，评审打开第一眼是陌生城市的菜单
+- `state.js`：新增 `ui.cityPickerOpen`，与 `storePickerOpen` 对称互斥（开一个自动关另一个）
+- `views.js`：新增 `renderCityPicker()`——15 个常用城市网格 + 「定位到当前位置」按钮
+- `app.js`：启动时记录 `firstVisit = !Store.state.store`，**默认门店加载完后**才弹选择器（避免每次刷新都弹）；`switchCity(city)` 直接把城市名当 keyword 调 `getStores`（实测 MCP 以 city 参数为主导，跨城搜索正常）
+- `voice.js`：门店/定位分支打开时先关掉城市选择器，避免两个浮层叠加
+
+## 2. 支付闭环（create-order 返回字段展示）
+
+- `checkout.js`：第 ④ 步从「只有取餐码」升级为完整支付闭环——「去支付」H5 链接（`payH5Url`，新窗口打开）、取餐柜二维码（`lockerQrCode`）、取餐柜密码（`lockerCode`）、支付截止时间（`expirePayTime`）、实付/优惠金额（`realTotalAmount`/`totalDiscountAmount`）
+- 新增 `ORDER_STATUS` 数字码 → 中文状态映射表（1 待支付 / 2 已支付·配餐中 / 4 配送中 / 6 已完成 / 7 已取消 / 8 已评价 / 10 餐厅确认配餐中；未知码走本地状态兜底，不谎报）
+- 全部字段按 MCP outputSchema 防御性解析（线上未真实下单验证过的字段做了空值保护，缺失时对应模块自动隐藏）
+
+## 3. 公网 IP 限流
+
+- 背景：线上站点公网可领券/真实下单（实测 claim 成功），存在被冒用风险
+- `server.js` 与 Pages Function 同步实现：写操作（order/claim）每 IP 每 10 分钟 20 次、读操作每分钟 600 次、`/api/status` 豁免；超限返回 429 + 可读原因
+- 阈值可用 `RATE_LIMIT_WRITE_MAX` / `RATE_LIMIT_READ_MAX` 环境变量调整（已写入 `.env.example`）；Workers isolate 尽力而为防护（代码注释已注明）
+- 新增 `scripts/ratelimit-test.js`：spawn 真实服务端子进程（阈值压到写 3/读 5）验证 429 边界 **7/7**
+
+## 4. 测试与回归（215 → 231）
+
+- budget-test 42 → **51**：新增城市选择器（点击 chip → 切换门店 → 菜单可用）、下单结果支付闭环（payH5Url href 转义断言、二维码、截止时间、实付优惠）两组用例
+- 修过的测试自身问题：城市选择用例上一节把路由停在 orders 页，切换后渲染的是订单视图——先 `setRoute('menu')` 再断言商品卡（产品无问题）
+- 全量回归：定位 71 + 冒烟 38 + 静态部署 13 + 响应式 28（真实 Edge）+ 语音 23 + 搭配 51 + 限流 7 = **231/231**
+
+## 5. 文档同步与提交
+
+- README：功能清单补首访城市选择/支付闭环/限流，测试计数 215 → 231，目录结构补 ratelimit-test.js
+- MCP_INTEGRATION.md：修正小节编号冲突（3.2/3.3 重复），新增 3.7 create-order 返回字段与支付闭环表
+- .env.example：补 `RATE_LIMIT_WRITE_MAX` / `RATE_LIMIT_READ_MAX` 说明
+- DEPLOYMENT.md / workbuddy.md：测试计数同步至 231

@@ -74,7 +74,7 @@ Content-Type: application/json
      → auto-bind-coupons（优惠券优先领取，一键领取）
      → 智能选券：并行逐张调用 calculate-price 试算 → 取实付最低
      → calculate-price（正式核价，返回明细 + takeWayList）
-     → 用户确认 → create-order（下单，返回订单号/取餐码）
+     → 用户确认 → create-order（下单，返回订单号/取餐码/支付链接/取餐柜二维码，见 3.7）
 
 ### 3.2 饭点安排 · 预算搭配（新增）
 
@@ -92,7 +92,7 @@ Content-Type: application/json
 失败时降级展示本地订单记录（按 orderId 去重）
 ```
 
-### 3.2 核价 items 组装（最复杂的部分）
+### 3.4 核价 items 组装（最复杂的部分）
 
 购物车每一行映射为 `items[]` 的一个元素：
 
@@ -129,7 +129,7 @@ Content-Type: application/json
 2. **未选中项若带 `unselectedKey` 也必须传**，`quantity = 0`；
 3. `minValues=1 && maxValues=1 && values.length===1` 的为**必选项**，UI 强制单选。
 
-### 3.3 券绑定约束（实测踩坑）
+### 3.5 券绑定约束（实测踩坑）
 
 券只能绑定到其适用商品，否则 MCP 返回 `600012 促销规则不支持该商品`。因此：
 
@@ -137,9 +137,33 @@ Content-Type: application/json
 - 无 products 的券 → 按券名关键词与商品名匹配（去价格前缀、去括号备注）；
 - 匹配不上的券不写入 `couponId/couponCode`，只参与试算。
 
-### 3.4 取餐方式
+### 3.6 取餐方式
 
 `calculate-price` 返回 `takeWayList`（实测 2 种：堂食 / 外带），下单时将其中的 `code` 作为 `takeWayCode` 回传。
+
+### 3.7 create-order 返回字段与支付闭环
+
+`create-order` 成功后返回 `orderDetail`，第 ④ 步结算据此渲染完整支付闭环：
+
+| 字段 | 含义 | 前端处理 |
+| --- | --- | --- |
+| `orderDetail.payH5Url` | 支付 H5 链接 | 「去支付」按钮（`target="_blank"` + `rel="noopener"`，href 经 HTML 转义） |
+| `orderDetail.lockerQrCode` | 取餐柜二维码（图片 URL） | 第 ④ 步直接渲染 `<img>` |
+| `orderDetail.lockerCode` | 取餐柜密码 | 明文展示，方便抄录 |
+| `orderDetail.expirePayTime` | 支付截止时间 | 「支付截止」提示 |
+| `orderDetail.realTotalAmount` / `totalDiscountAmount` | 实付金额 / 优惠金额 | 结算结果卡片（实付大字号 + 优惠说明） |
+| `orderDetail.orderStatus`（数字码） | 订单状态 | `ORDER_STATUS` 映射表转中文（见下） |
+
+**订单状态数字码映射**（`checkout.js` 的 `ORDER_STATUS`，实测与官方文档校准）：
+
+| 码 | 状态 | 码 | 状态 |
+| --- | --- | --- | --- |
+| 1 | 待支付 | 6 | 已完成 |
+| 2 | 已支付 · 配餐中 | 7 | 已取消 |
+| 4 | 配送中 | 8 | 已评价 |
+| 10 | 餐厅确认配餐中 | 其他 | 按本地状态文案兜底，不谎报 |
+
+> 防御性实现：所有字段均做空值保护——`payH5Url` 缺失时不渲染「去支付」按钮，二维码/密码/截止时间缺失时对应模块自动隐藏；线上未真实下单验证过的字段按 outputSchema 解析，不影响主流程。
 
 ---
 

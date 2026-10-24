@@ -55,6 +55,8 @@ async function waitFor(fn, timeout = 8000, interval = 100) {
   const bundle = ['config.js', 'geo.js', 'api.js', 'state.js', 'checkout.js', 'budget.js', 'voice.js', 'views.js', 'app.js']
     .map((f) => fs.readFileSync(path.join(ROOT, 'public/js', f), 'utf8')).join('\n;\n')
     + '\n;window.__app = { Store, Api, BudgetPlanner, Views, UI, Voice };';
+  // 预置历史门店：跳过首访城市选择，聚焦被测流程
+  window.localStorage.setItem('mcd_store_v1', JSON.stringify(fixtures.stores[0]));
   window.eval(bundle);
   const S = () => window.__app.Store;
   const B = () => window.__app.BudgetPlanner;
@@ -156,6 +158,39 @@ async function waitFor(fn, timeout = 8000, interval = 100) {
   /* ===== 9. 语音指令 ===== */
   await window.__app.Voice.handleCommand('50元吃什么');
   check('语音：预算指令打开搭配浮层并带入预算', B().open === true && B().budget === 50);
+  B().close();
+
+  /* ===== 10. 首访城市选择器 ===== */
+  S().setRoute('menu');
+  S().setCityPicker(true);
+  await sleep(50);
+  check('城市选择器：展示城市网格', document.querySelectorAll('.city-chip').length >= 10);
+  check('城市选择器：提供定位入口', !!document.querySelector('[data-action="locate-me"]'));
+  document.querySelector('.city-chip').click();   // 点击第一个城市（济南）
+  await waitFor(() => !S().state.ui.cityPickerOpen, 5000);
+  check('城市选择器：选择后关闭并切换门店', !S().state.ui.cityPickerOpen && !!S().state.store && /麦当劳/.test(S().state.store.storeName || ''), S().state.store ? S().state.store.storeName : '无');
+  await waitFor(() => document.querySelectorAll('.product-card').length > 0, 5000);
+  check('城市选择器：切换后菜单仍可用', document.querySelectorAll('.product-card').length > 0);
+
+  /* ===== 11. 下单结果支付闭环（payH5Url / 取餐柜二维码 / 支付截止） ===== */
+  S().patchCheckout({
+    step: 4,
+    orderResult: {
+      orderId: 'O20261024', payH5Url: 'https://pay.mcd.cn/h5?orderId=O20261024&sign=abc',
+      orderDetail: {
+        pickupCode: '8888', lockerQrCode: 'https://img.mcd.cn/cms/locker-qr.png', lockerCode: 'A12',
+        expirePayTime: '2026-10-24 22:30', orderStatus: '1', realTotalAmount: '29.9', totalDiscountAmount: '5.0',
+      },
+    },
+  });
+  S().setRoute('checkout');
+  await sleep(80);
+  const osHtml = document.querySelector('#view-root').innerHTML;
+  check('下单结果：展示取餐码', osHtml.includes('8888'));
+  check('下单结果：支付链接可点击（新标签打开）', /href="https:\/\/pay\.mcd\.cn\/h5\?orderId=O20261024&amp;sign=abc"[^>]*target="_blank"/.test(osHtml));
+  check('下单结果：取餐柜二维码与密码', osHtml.includes('locker-qr.png') && osHtml.includes('A12'));
+  check('下单结果：支付截止时间', osHtml.includes('2026-10-24 22:30'));
+  check('下单结果：实付金额与优惠', osHtml.includes('29.9') && osHtml.includes('本单优惠 ¥5'));
 
   const pass = results.filter((r) => r.pass).length;
   console.log(`\n${pass === results.length ? '✅' : '❌'} 预算搭配测试: ${pass}/${results.length}`);
