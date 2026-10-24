@@ -7,7 +7,12 @@
 
 const fs = require('fs');
 const path = require('path');
-const { JSDOM } = require('C:/Users/86181/.workbuddy/binaries/node/workspace/node_modules/jsdom');
+let JSDOM;
+try {
+  ({ JSDOM } = require('C:/Users/86181/.workbuddy/binaries/node/workspace/node_modules/jsdom'));
+} catch (_) {
+  ({ JSDOM } = require('jsdom'));
+}
 
 const ROOT = path.join(__dirname, '..');
 const fixtures = JSON.parse(fs.readFileSync(path.join(ROOT, 'scripts/fixtures.json'), 'utf8'));
@@ -113,9 +118,9 @@ const html = fs.readFileSync(path.join(ROOT, 'public/index.html'), 'utf8')
   window.innerWidth = 1280;
   window.speechSynthesis = { cancel() {}, speak() {} };
 
-  const bundle = ['config.js', 'geo.js', 'api.js', 'state.js', 'checkout.js', 'voice.js', 'views.js', 'app.js']
+  const bundle = ['config.js', 'geo.js', 'api.js', 'state.js', 'checkout.js', 'budget.js', 'voice.js', 'views.js', 'app.js']
     .map((f) => fs.readFileSync(path.join(ROOT, 'public/js', f), 'utf8')).join('\n;\n')
-    + '\n;window.__app = { Store, Api, Draft, Voice, Views, UI, CheckoutCtrl, Geo, haversine, formatDistance, formatAccuracy, hashAngle };';
+    + '\n;window.__app = { Store, Api, Draft, Voice, Views, UI, CheckoutCtrl, Geo, haversine, formatDistance, formatAccuracy, hashAngle, BudgetPlanner };';
   window.eval(bundle);
   const App = () => window.__app;
   const S = () => App().Store;

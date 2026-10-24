@@ -254,6 +254,7 @@ const Views = {
             <button data-action="quick-search" data-kw="麦旋风">🍦 麦旋风</button>
             <button data-action="quick-search" data-kw="安格斯">🥩 安格斯</button>
           </div>
+          <button class="btn btn-yellow btn-sm planner-entry" data-action="open-planner">🪄 饭点安排：说个预算，帮你配好一顿</button>
         </section>
         <div class="search-bar">
           <span>🔍</span>
@@ -634,20 +635,48 @@ const Views = {
     </div>`;
   },
 
-  /* ---------- 订单列表 ---------- */
+  /* ---------- 订单列表（麦当劳账户实时订单 + 本地记录兜底） ---------- */
   renderOrders(state) {
-    $('#view-root').innerHTML = `
+    const root = $('#view-root');
+    // 实时模式首次进入：拉取麦当劳账户订单（order-list），加载中显示骨架
+    if (state.mode === 'live' && !state.ordersLoaded) {
+      root.dataset.view = 'orders';
+      root.innerHTML = `<div class="checkout-wrap"><h2 class="menu-section-title">📋 我的订单</h2>
+        <div class="checkout-card"><div class="skeleton" style="height:64px"></div>
+        <div class="skeleton" style="height:64px;margin-top:10px"></div></div></div>`;
+      Api.getOrders()
+        .then((list) => Store.setMcpOrders(list))
+        .catch(() => Store.markOrdersLoaded());   // 失败时降级展示本地记录
+      return;
+    }
+    // MCP 订单映射为展示结构；本地订单按 orderId 去重后补充（带「本地记录」标记）
+    const mcp = (state.mcpOrders || []).map((o) => ({
+      orderId: o.orderId || '',
+      status: o.orderStatus || '',
+      storeName: o.storeName || '麦当劳',
+      items: (o.orderProductList || []).map((p) => ({ name: p.productName || '', qty: p.quantity || 1 })),
+      total: parseFloat(o.realTotalAmount) || 0,
+      time: o.createTime || '',
+      takeWay: o.orderType === '1' ? '到店' : (o.orderType === '2' ? '外带' : ''),
+      local: false,
+    }));
+    const seen = new Set(mcp.map((o) => o.orderId).filter(Boolean));
+    const local = state.orders
+      .filter((o) => !o.orderId || !seen.has(o.orderId))
+      .map((o) => ({ ...o, local: true }));
+    const all = [...mcp, ...local];
+    root.innerHTML = `
       <div class="checkout-wrap">
-        <h2 class="menu-section-title">📋 我的订单</h2>
-        ${state.orders.length ? state.orders.map((o) => `
+        <h2 class="menu-section-title">📋 我的订单${state.mcpOrders && state.mcpOrders.length ? ' <small style="font-size:12px;color:var(--ink-3);font-weight:400">已接入麦当劳账户实时订单</small>' : ''}</h2>
+        ${all.length ? all.map((o) => `
           <div class="order-card">
             <div class="oc-head">
               <span class="oc-store">${esc(o.storeName || '麦当劳')}</span>
-              <span class="oc-status">${esc(o.status || '已完成')}</span>
+              <span class="oc-status">${esc(o.status || '已完成')}${o.local ? ' · 本地记录' : ''}</span>
             </div>
             <div class="oc-items">${o.items.map((i) => `${esc(i.name)} ×${i.qty}`).join('<br />')}</div>
             <div class="oc-foot">
-              <span class="oc-time">${esc(o.time || '')} · ${esc(o.takeWay || '')}</span>
+              <span class="oc-time">${esc(o.time || '')}${o.takeWay ? ' · ' + esc(o.takeWay) : ''}</span>
               <span class="oc-total">¥${fmtMoney(o.total)}</span>
             </div>
           </div>`).join('')

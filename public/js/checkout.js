@@ -152,7 +152,19 @@ const CheckoutCtrl = {
     const c = state.ui.checkout;
     const r = c.priceResult;
     if (!r) {
-      return `<div class="checkout-card"><div class="skeleton" style="height:200px"></div></div>`;
+      // 核价失败/未完成：给出重试入口，避免永久骨架屏
+      return `
+      <div class="checkout-card">
+        <h3>💰 价格确认</h3>
+        <div class="empty-state" style="padding:20px 0">
+          <div class="empty-emoji">🧾</div>
+          <p>核价失败或尚未完成${Api.authFailed ? '<br /><span style="color:#c2410c">服务端 Token 可能已失效，请更新后重试</span>' : ''}</p>
+          <button class="btn btn-primary" data-action="retry-price" style="margin-top:12px">重新核价</button>
+        </div>
+      </div>
+      <div class="checkout-card" style="display:flex;gap:10px">
+        <button class="btn btn-ghost" data-action="checkout-back">上一步</button>
+      </div>`;
     }
     const coupon = c.coupon;
     return `
@@ -253,12 +265,14 @@ const CheckoutCtrl = {
       UI.toast(`领取成功，当前可用 ${list.length} 张券`, 'success');
     } catch (e) {
       Store.patchCheckout({ claiming: false });
-      UI.toast('领券失败：' + e.message, 'error');
+      UI.toast(Api.authFailed
+        ? '领券失败：服务端 MCP Token 可能已失效，请更新 .env 的 MCD_MCP_TOKEN 后重启服务'
+        : '领券失败：' + e.message, 'error');
     }
     this.render(Store.state);
   },
 
-  /** 智能选最优：逐张试算，取到手价最低 */
+  /** 智能选最优：并行试算全部适用券，取到手价最低 */
   async smartPick() {
     const state = Store.state;
     const candidates = (state.ui.checkout.coupons || []).filter((c) => Api.couponMatchedCodes(c, state.cart).size > 0).slice(0, 8);
@@ -267,13 +281,15 @@ const CheckoutCtrl = {
       return;
     }
     UI.toast(`正在试算 ${candidates.length} 张适用券…`);
+    // 并行试算（限流 600 次/分钟内完全可控），单张失败不影响其他券
+    const settled = await Promise.allSettled(candidates.map(async (cp) => {
+      const r = await Api.calculatePrice(state.store.storeCode, state.cart, cp, state.ui.checkout.needTableware);
+      return { coupon: cp, price: r.price ?? Infinity, result: r };
+    }));
     let best = null;
-    for (const cp of candidates) {
-      try {
-        const r = await Api.calculatePrice(state.store.storeCode, state.cart, cp, state.ui.checkout.needTableware);
-        const price = r.price ?? Infinity;
-        if (!best || price < best.price) best = { coupon: cp, price, result: r };
-      } catch (_) { /* 单张券失败不影响其他券 */ }
+    for (const s of settled) {
+      if (s.status !== 'fulfilled') continue;
+      if (!best || s.value.price < best.price) best = s.value;
     }
     if (!best) { UI.toast('试算失败，请手动选择', 'error'); return; }
     Store.patchCheckout({
@@ -322,7 +338,9 @@ const CheckoutCtrl = {
       Store.patchCheckout({ step: 4, orderResult: r });
       UI.toast('下单成功，请完成支付', 'success');
     } catch (e) {
-      UI.toast('下单失败：' + e.message, 'error');
+      UI.toast(Api.authFailed
+        ? '下单失败：服务端 MCP Token 可能已失效，请更新 .env 的 MCD_MCP_TOKEN 后重启服务'
+        : '下单失败：' + e.message, 'error');
     }
     UI.btnRestore(btn);
     this.render(Store.state);

@@ -7,7 +7,12 @@
 
 const fs = require('fs');
 const path = require('path');
-const { JSDOM } = require('C:/Users/86181/.workbuddy/binaries/node/workspace/node_modules/jsdom');
+let JSDOM;
+try {
+  ({ JSDOM } = require('C:/Users/86181/.workbuddy/binaries/node/workspace/node_modules/jsdom'));
+} catch (_) {
+  ({ JSDOM } = require('jsdom'));
+}
 
 const ROOT = path.join(__dirname, '..');
 const html = fs.readFileSync(path.join(ROOT, 'public/index.html'), 'utf8')

@@ -11,7 +11,9 @@ function createStore() {
     menu: null,                // { categories, meals }
     nutrition: {},             // 营养表
     cart: [],                  // 购物车行
-    orders: [],                // 本地订单历史
+    orders: [],                // 本地订单历史（下单成功时记录，MCP 不可用时兜底展示）
+    mcpOrders: [],             // 麦当劳账户实时订单（MCP order-list）
+    ordersLoaded: false,       // 实时订单是否已尝试加载（避免重复请求）
     geo: {                     // 实时定位状态
       status: 'idle',          // idle | locating | success | error
       position: null,
@@ -116,6 +118,10 @@ function createStore() {
     cartOriginal() { return state.cart.reduce((s, l) => s + (l.originalPrice || l.unitPrice) * l.qty, 0); },
 
     addOrder(order) { state.orders.unshift(order); this.emit(); },
+
+    /** 实时订单（MCP order-list）加载完成 / 失败 */
+    setMcpOrders(list) { state.mcpOrders = Array.isArray(list) ? list : []; state.ordersLoaded = true; this.emit(); },
+    markOrdersLoaded() { state.ordersLoaded = true; this.emit(); },
   };
   return store;
 }

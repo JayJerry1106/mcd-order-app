@@ -156,7 +156,7 @@ const Voice = {
   },
 
   suggestionChips() {
-    const chips = ['我想吃巨无霸', '有什么优惠', '打开购物车', '去结算', '定位附近门店'];
+    const chips = ['我想吃巨无霸', '50元吃什么', '有什么优惠', '打开购物车', '去结算', '定位附近门店'];
     return chips.map((c) => `<button data-action="voice-cmd" data-cmd="${esc(c)}">${esc(c)}</button>`).join('');
   },
 
@@ -244,6 +244,17 @@ const Voice = {
       Store.setStorePicker(true);
       reply = '已打开门店选择，附近有 ' + Store.state.stores.length + ' 家麦当劳';
       this.reply(reply); return;
+    }
+
+    // 8.5) 饭点安排 / 预算搭配（「50元吃什么」「帮我搭配一下」）
+    if (/搭配|饭点|预算/.test(text) || (/\d+(?:\.\d+)?\s*元/.test(text) && /吃|点|配|安排|来/.test(text))) {
+      const m = text.match(/(\d+(?:\.\d+)?)\s*元/);
+      const budget = m ? parseFloat(m[1]) : 50;
+      if (typeof BudgetPlanner === 'undefined') { this.reply('搭配功能加载中，请稍后再试'); return; }
+      Store.setStorePicker(false);
+      BudgetPlanner.openPlanner(budget);
+      this.reply(`好的，按 ${budget} 元预算为你搭配，正在实时核价`);
+      return;
     }
 
     // 9) 搜索 / 点名商品（「来一份薯条」「我想吃巨无霸」等）

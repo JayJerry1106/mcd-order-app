@@ -53,8 +53,9 @@ Content-Type: application/json
 | `auto-bind-coupons` | 一键领取全部可领券 | — |
 | `query-my-coupons` | 我的券包 | `page, pageSize` |
 | `query-store-coupons` | 当前门店可用券 | `storeCode, orderType, beType` |
-| `calculate-price` | 结算核价（含 `takeWayList` 取餐方式） | `storeCode, orderType, items, needTableware, withOrder` |
+| `calculate-price` | 结算核价（含 `takeWayList` 取餐方式）；预算搭配引擎的成交价核实 | `storeCode, orderType, items, needTableware, withOrder` |
 | `create-order` | 创建订单 | `storeCode, items, takeWayCode, addressId, needTableware, remark, withOrder` |
+| `order-list` | 麦当劳账户实时订单（「我的订单」页，本地记录兜底） | `page, pageSize` |
 | `list-nutrition-foods` | 158 项食物营养数据（CSV 文本） | — |
 
 ---
@@ -71,9 +72,24 @@ Content-Type: application/json
 结算：
      → available-coupons + query-my-coupons + query-store-coupons（合并券池）
      → auto-bind-coupons（优惠券优先领取，一键领取）
-     → 智能选券：逐张券调用 calculate-price 试算 → 取实付最低
+     → 智能选券：并行逐张调用 calculate-price 试算 → 取实付最低
      → calculate-price（正式核价，返回明细 + takeWayList）
      → 用户确认 → create-order（下单，返回订单号/取餐码）
+
+### 3.2 饭点安排 · 预算搭配（新增）
+
+```
+用户输入预算 → query-meals（当前门店真实菜单，60s 缓存）
+  → 本地分类（主食/小食/饮料，排除套餐）+ 估价枚举预算内组合
+  → 本地排序取前 4 候选 → calculate-price 并行核实成交价（失败降级本地估价）
+  → 按实时价/热量重排序输出前 3 → 用户一键加入购物车
+```
+
+### 3.3 实时订单（新增）
+
+```
+「我的订单」页 → order-list（page/pageSize）→ 映射为订单卡片；
+失败时降级展示本地订单记录（按 orderId 去重）
 ```
 
 ### 3.2 核价 items 组装（最复杂的部分）

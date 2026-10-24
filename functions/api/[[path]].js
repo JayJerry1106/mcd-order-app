@@ -73,6 +73,7 @@ const ROUTES = {
   'POST /api/price': (b) => ({ tool: 'calculate-price', args: { storeCode: b?.storeCode, orderType: b?.orderType ?? 1, beType: b?.beType ?? 1, beCode: b?.beCode, items: b?.items, needTableware: b?.needTableware, withOrder: b?.withOrder } }),
   'POST /api/order': (b) => ({ tool: 'create-order', args: { storeCode: b?.storeCode, orderType: b?.orderType ?? 1, beType: b?.beType ?? 1, beCode: b?.beCode, items: b?.items, takeWayCode: b?.takeWayCode, addressId: b?.addressId, needTableware: b?.needTableware, remark: b?.remark, withOrder: b?.withOrder } }),
   'GET /api/nutrition': () => ({ tool: 'list-nutrition-foods', args: {} }),
+  'POST /api/orders': (b) => ({ tool: 'order-list', args: { page: String(b?.page ?? 1), pageSize: String(b?.pageSize ?? 20) } }),
 };
 
 export async function onRequest(context) {

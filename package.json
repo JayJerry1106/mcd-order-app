@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "test": "node scripts/geo-test.js && node scripts/smoke-test.js && node scripts/static-deploy-test.js && node scripts/responsive-test.js && node scripts/voice-test.js",
+    "test": "node scripts/geo-test.js && node scripts/smoke-test.js && node scripts/static-deploy-test.js && node scripts/responsive-test.js && node scripts/voice-test.js && node scripts/budget-test.js",
     "test:live": "node scripts/live-test.js"
   },
   "engines": {
@@ -20,5 +20,9 @@
     "ordering",
     "voice"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "jsdom": "^30.1.3",
+    "puppeteer-core": "^25.16.0"
+  }
 }

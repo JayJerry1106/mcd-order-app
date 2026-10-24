@@ -10,7 +10,12 @@
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
-const { JSDOM } = require('C:/Users/86181/.workbuddy/binaries/node/workspace/node_modules/jsdom');
+let JSDOM;
+try {
+  ({ JSDOM } = require('C:/Users/86181/.workbuddy/binaries/node/workspace/node_modules/jsdom'));
+} catch (_) {
+  ({ JSDOM } = require('jsdom'));
+}
 
 const ROOT = path.join(__dirname, '..');
 const PUBLIC_DIR = path.join(ROOT, 'public');
@@ -120,7 +125,7 @@ function makeServer(backendEnabled) {
       }).on('error', reject);
     });
 
-    const bundle = ['config.js', 'geo.js', 'api.js', 'state.js', 'checkout.js', 'voice.js', 'views.js', 'app.js']
+    const bundle = ['config.js', 'geo.js', 'api.js', 'state.js', 'checkout.js', 'budget.js', 'voice.js', 'views.js', 'app.js']
       .map((f) => fs.readFileSync(path.join(ROOT, 'public/js', f), 'utf8')).join('\n;\n')
       + '\n;window.__app = { Store, Api, Geo };';
     window.eval(bundle);

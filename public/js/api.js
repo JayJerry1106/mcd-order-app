@@ -4,6 +4,7 @@
 const Api = {
   mode: 'offline',        // 'live' | 'offline'
   backendError: null,
+  authFailed: false,      // 服务端 MCP Token 鉴权失败（401/403）：全局引导更新 Token
 
   /**
    * 初始化：探测服务端是否提供真实后端（持有麦当劳 MCP Token）。
@@ -11,6 +12,7 @@ const Api = {
    * 并记录错误——前端据此展示「需配置后端」提示，绝不回退到任何模拟数据。
    */
   async init() {
+    this.authFailed = false;
     try {
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 2500);
@@ -40,8 +42,16 @@ const Api = {
       headers: body ? { 'Content-Type': 'application/json' } : undefined,
       body: body ? JSON.stringify(body) : undefined,
     });
+    // 鉴权失败：Token 过期/被吊销都会走到这里，置全局标志供写操作给出精准引导
+    if (res.status === 401 || res.status === 403) {
+      this.authFailed = true;
+      throw new Error(`服务端 MCP Token 鉴权失败（HTTP ${res.status}），请更新 .env 的 MCD_MCP_TOKEN 后重启`);
+    }
     const json = await res.json().catch(() => ({}));
-    if (!json.success) throw new Error(json.error || `接口 ${path} 调用失败`);
+    if (!json.success) {
+      if (/token|鉴权|授权|unauthor|forbidden/i.test(json.error || '')) this.authFailed = true;
+      throw new Error(json.error || `接口 ${path} 调用失败`);
+    }
     // MCP 业务信封：success:false 时抛出真实原因（如商品已售罄）
     if (json.data && typeof json.data === 'object' && json.data.success === false) {
       throw new Error(json.data.message || '麦当劳返回业务错误');
@@ -145,6 +155,13 @@ const Api = {
   async getNutrition() {
     const d = await this.req(appUrl('/api/nutrition'));
     return parseNutritionText(typeof d === 'string' ? d : d?.text || '');
+  },
+
+  /** 麦当劳账户实时订单（MCP order-list） */
+  async getOrders() {
+    const d = await this.req(appUrl('/api/orders'), { page: 1, pageSize: 20 });
+    const list = d?.data?.list || d?.list || d;
+    return Array.isArray(list) ? list : Object.values(list || {});
   },
 
   /** 核价：组装 calculate-price 入参 */

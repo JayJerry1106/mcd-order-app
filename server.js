@@ -168,6 +168,11 @@ const routes = {
   },
 
   'GET /api/nutrition': async () => callMcp('list-nutrition-foods'),
+
+  'POST /api/orders': async (body) => {
+    const { page = '1', pageSize = '20' } = body || {};
+    return callMcp('order-list', { page: String(page), pageSize: String(pageSize) });
+  },
 };
 
 class HttpError extends Error {

@@ -154,6 +154,7 @@
         UI.closeModal();
         Store.closeDetail();
         Store.setStorePicker(false);
+        BudgetPlanner.open = false;
         break;
 
       case 'qty-inc': {
@@ -178,6 +179,33 @@
       case 'open-voice':
         Voice.open();
         break;
+
+      /* ---- 饭点安排 · 预算搭配 ---- */
+      case 'open-planner':
+        BudgetPlanner.openPlanner();
+        break;
+      case 'planner-budget':
+        BudgetPlanner.budget = parseInt(el.dataset.b, 10) || BudgetPlanner.budget;
+        BudgetPlanner.result = null;
+        BudgetPlanner.render();
+        break;
+      case 'planner-mode':
+        BudgetPlanner.mode = el.dataset.m === 'full' ? 'full' : 'save';
+        BudgetPlanner.result = null;
+        BudgetPlanner.render();
+        break;
+      case 'planner-run':
+        BudgetPlanner.plan();
+        break;
+      case 'planner-add':
+        BudgetPlanner.addCombo(parseInt(el.dataset.idx, 10));
+        break;
+      case 'retry-price': {
+        UI.btnLoading(el, '核价中');
+        await CheckoutCtrl.goPrice();
+        UI.btnRestore(el);
+        break;
+      }
 
       /* ---- 详情弹层 ---- */
       case 'pick-round':
